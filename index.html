@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Christmas Tree Stroke for Asa</title>
+    <!-- Mountains of Christmas 字体 from Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Mountains+of+Christmas:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            background: #031436;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Mountains of Christmas', cursive;
+        }
+
+        canvas {
+            display: block;
+            margin: 0;
+            background: #031436;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="treeCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('treeCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resize() {
+        const ratio = window.devicePixelRatio || 1;
+        const width = window.innerWidth || document.documentElement.clientWidth || 390;  // iPhone 16 宽度
+        const height = window.innerHeight || document.documentElement.clientHeight || 844; // iPhone 16 高度
+
+        canvas.style.width = width + 'px';
+        canvas.style.height = height + 'px';
+        canvas.width = width * ratio;
+        canvas.height = height * ratio;
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        }
+
+        resize();
+        window.addEventListener('resize', () => {
+        resize();
+        buildStrokePath();
+        });
+
+        function clear() {
+        ctx.fillStyle = '#031436';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        let strokePoints = [];
+        let strokeSegments = [];
+        let strokeTotalLen = 0;
+
+        function buildStrokePath() {
+        strokePoints = [];
+        strokeSegments = [];
+        strokeTotalLen = 0;
+
+        const w = canvas.clientWidth;
+        const h = canvas.clientHeight;
+
+        const centerX = w / 2;
+        // iPhone 16 竖屏优化：树更紧凑，留更多文字空间
+        const baseY = h * 0.82;    // 树底更靠下
+        const topY = h * 0.22;     // 树顶稍低
+        const halfWidth = Math.min(w, h) * 0.30;  // 树更窄适配窄屏
+        const levels = 5;
+
+        const trunkHeight = (baseY - topY) * 0.12;  // 树干更短
+
+        strokePoints.push({ x: centerX, y: baseY + trunkHeight });
+        strokePoints.push({ x: centerX, y: baseY });
+
+        let currentY = baseY;
+        let currentHalf = halfWidth * 0.9;
+
+        for (let i = 0; i < levels; i++) {
+        const nextY = baseY - (baseY - topY) * ((i + 1) / levels);
+        const nextHalf = halfWidth * (0.2 + (1 - (i + 1) / levels) * 0.8);
+
+        if (i % 2 === 0) {
+        strokePoints.push({ x: centerX + currentHalf * 0.95, y: currentY - (currentY - nextY) * 0.3 });
+        strokePoints.push({ x: centerX + nextHalf, y: nextY });
+        strokePoints.push({ x: centerX - nextHalf, y: nextY });
+        strokePoints.push({ x: centerX - currentHalf * 0.95, y: currentY - (currentY - nextY) * 0.3 });
+        } else {
+        strokePoints.push({ x: centerX - currentHalf * 0.95, y: currentY - (currentY - nextY) * 0.3 });
+        strokePoints.push({ x: centerX - nextHalf, y: nextY });
+        strokePoints.push({ x: centerX + nextHalf, y: nextY });
+        strokePoints.push({ x: centerX + currentHalf * 0.95, y: currentY - (currentY - nextY) * 0.3 });
+        }
+
+        currentY = nextY;
+        currentHalf = nextHalf;
+        }
+
+        strokePoints.push({ x: centerX, y: topY });
+        const starCenterY = topY - Math.min(w, h) * 0.035;
+        strokePoints.push({ x: centerX, y: starCenterY });
+
+        for (let i = 0; i < strokePoints.length - 1; i++) {
+        const p1 = strokePoints[i];
+        const p2 = strokePoints[i + 1];
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const len = Math.hypot(dx, dy);
+        const seg = {
+        x1: p1.x, y1: p1.y,
+        x2: p2.x, y2: p2.y,
+        len,
+        startLen: strokeTotalLen,
+        endLen: strokeTotalLen + len
+        };
+        strokeSegments.push(seg);
+        strokeTotalLen += len;
+        }
+        }
+
+        buildStrokePath();
+
+        function getPointAtStrokeLength(L) {
+        L = Math.max(0, Math.min(L, strokeTotalLen));
+        for (const seg of strokeSegments) {
+        if (L <= seg.endLen) {
+        const t = (L - seg.startLen) / seg.len;
+        return {
+        x: seg.x1 + (seg.x2 - seg.x1) * t,
+        y: seg.y1 + (seg.y2 - seg.y1) * t
+        };
+        }
+        }
+        const last = strokeSegments[strokeSegments.length - 1];
+        return { x: last.x2, y: last.y2 };
+        }
+
+        const drawDuration = 6000;
+        const stayDuration = 1500;
+        const loopDuration = drawDuration + stayDuration;
+
+        const starCount = 80;
+        const starLife = 1600;
+        const stars = [];
+
+        function spawnStar(now, maxLen) {
+        const baseL = Math.random() * maxLen;
+        const basePos = getPointAtStrokeLength(baseL);
+        return {
+        baseL,
+        baseX: basePos.x,
+        baseY: basePos.y,
+        driftAngle: Math.random() * Math.PI * 2,
+        driftSpeed: 10 + Math.random() * 15,
+        floatUp: 5 + Math.random() * 10,
+        color: Math.random() < 0.5 ? '#ff4d4f' : '#4ddc64',
+        size: 2 + Math.random() * 2.5,
+        birthTime: now
+        };
+        }
+
+        for (let i = 0; i < starCount; i++) {
+        stars.push({
+        baseL: 0,
+        baseX: 0,
+        baseY: 0,
+        driftAngle: Math.random() * Math.PI * 2,
+        driftSpeed: 10 + Math.random() * 15,
+        floatUp: 5 + Math.random() * 10,
+        color: Math.random() < 0.5 ? '#ff4d4f' : '#4ddc64',
+        size: 2 + Math.random() * 2.5,
+        birthTime: -Math.random() * starLife
+        });
+        }
+
+        function drawSmallStar(x, y, radius, color, alpha) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = color;
+
+        const spikes = 5;
+        const outerR = radius;
+        const innerR = radius * 0.45;
+
+        ctx.beginPath();
+        for (let i = 0; i < spikes * 2; i++) {
+        const r = (i % 2 === 0) ? outerR : innerR;
+        const angle = (Math.PI * i) / spikes;
+        const sx = Math.cos(angle) * r;
+        const sy = Math.sin(angle) * r;
+        if (i === 0) ctx.moveTo(sx, sy);
+        else ctx.lineTo(sx, sy);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+        }
+
+        function drawStrokeCurve(progress) {
+        const drawLen = strokeTotalLen * progress;
+        if (strokePoints.length < 2) return;
+
+        ctx.strokeStyle = '#b07CFF';
+        ctx.lineWidth = 2.8;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        ctx.beginPath();
+        const tip = getPointAtStrokeLength(drawLen);
+
+        ctx.moveTo(strokePoints[0].x, strokePoints[0].y);
+
+        for (let i = 1; i < strokePoints.length; i++) {
+        const p0 = strokePoints[i - 1];
+        const p1 = strokePoints[i];
+        const seg = strokeSegments[i - 1];
+        if (!seg) break;
+
+        if (seg.endLen <= drawLen) {
+        const cx = (p0.x + p1.x) / 2;
+        const cy = (p0.y + p1.y) / 2;
+        ctx.quadraticCurveTo(p0.x, p0.y, cx, cy);
+        } else if (seg.startLen < drawLen) {
+        const cx = (p0.x + tip.x) / 2;
+        const cy = (p0.y + tip.y) / 2;
+        ctx.quadraticCurveTo(p0.x, p0.y, cx, cy);
+        ctx.quadraticCurveTo(cx, cy, tip.x, tip.y);
+        break;
+        } else {
+        break;
+        }
+        }
+
+        ctx.stroke();
+
+        if (progress > 0) {
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(tip.x, tip.y, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+        }
+        }
+
+        function drawTrailStars(time, progress) {
+        if (progress <= 0 || strokeTotalLen <= 0) return;
+
+        const now = time;
+        const maxLen = strokeTotalLen * progress;
+
+        for (let i = 0; i < stars.length; i++) {
+        let star = stars[i];
+        const age = now - star.birthTime;
+
+        if (age > starLife) {
+        if (maxLen > 10) {
+        stars[i] = spawnStar(now, maxLen);
+        star = stars[i];
+        } else {
+        continue;
+        }
+        }
+
+        const lifeRatio = Math.max(0, Math.min(1, age / starLife));
+        let alpha;
+        if (lifeRatio < 0.3) {
+        alpha = lifeRatio / 0.3;
+        } else {
+        alpha = Math.max(0, 1 - (lifeRatio - 0.3) / 0.7);
+        }
+
+        const tSec = age / 1000;
+        const driftRadius = star.driftSpeed * tSec;
+        const offsetX = Math.cos(star.driftAngle + tSec * 2) * driftRadius * 0.25;
+        const offsetY = -star.floatUp * tSec + Math.sin(star.driftAngle + tSec * 1.5) * driftRadius * 0.15;
+
+        const x = star.baseX + offsetX;
+        const y = star.baseY + offsetY;
+
+        drawSmallStar(x, y, star.size, star.color, alpha);
+        }
+        }
+
+        function drawTopStar(elapsed, progress) {
+        if (progress < 1) return;
+
+        const w = canvas.clientWidth;
+        const h = canvas.clientHeight;
+        const centerX = w / 2;
+        const topY = h * 0.22;
+        const outerR = Math.min(w, h) * 0.03;
+        const innerR = outerR * 0.45;
+        const spikes = 5;
+
+        const fadeInDuration = 1.0;
+        const extraTime = elapsed - drawDuration;
+        let alpha = 1;
+
+        if (extraTime < fadeInDuration * 1000) {
+        alpha = Math.max(0, extraTime / (fadeInDuration * 1000));
+        }
+
+        ctx.save();
+        ctx.translate(centerX, topY - outerR * 0.8);
+        ctx.rotate(-Math.PI / 2);
+        ctx.globalAlpha = alpha;
+
+        ctx.beginPath();
+        for (let i = 0; i < spikes * 2; i++) {
+        const r = i % 2 === 0 ? outerR : innerR;
+        const angle = (Math.PI * i) / spikes;
+        const x = Math.cos(angle) * r;
+        const y = Math.sin(angle) * r;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+
+        const gradient = ctx.createRadialGradient(0, 0, innerR * 0.2, 0, 0, outerR);
+        gradient.addColorStop(0,   '#ffffff');
+        gradient.addColorStop(0.35,'#e6ddff');
+        gradient.addColorStop(0.7, '#b39dff');
+        gradient.addColorStop(1,   '#6f7bf7');
+
+        ctx.fillStyle = gradient;
+        ctx.shadowColor = 'rgba(179,157,255,0.9)';
+        ctx.shadowBlur = outerR * 0.9;
+        ctx.fill();
+        ctx.restore();
+        }
+
+        // iPhone 16 优化文字：自动换行 + 自适应大小
+        function drawText() {
+        const w = canvas.clientWidth;
+        const h = canvas.clientHeight;
+        const fullText = 'May you have a blessed and merry Christmas, Asa.';
+        const maxTextWidth = w * 0.92;  // 留 4% 边距
+        const textAreaBottom = h * 0.95;  // 文字区域底部
+
+        ctx.save();
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+
+        // 自适应字体大小
+        let fontSize = Math.min(28, Math.floor(h * 0.035));
+        ctx.font = `700 ${fontSize}px 'Mountains of Christmas', cursive`;
+
+        // 检查单行是否超出，超出则换行
+        let words = fullText.split(' ');
+        let lines = [];
+        let currentLine = '';
+
+        for (let word of words) {
+        let testLine = currentLine ? currentLine + ' ' + word : word;
+        let metrics = ctx.measureText(testLine);
+        if (metrics.width > maxTextWidth && currentLine) {
+        lines.push(currentLine);
+        currentLine = word;
+        } else {
+        currentLine = testLine;
+        }
+        }
+        if (currentLine) lines.push(currentLine);
+
+        // 多行文字垂直居中在底部区域
+        const lineHeight = fontSize * 1.2;
+        const totalHeight = lines.length * lineHeight;
+        const startY = textAreaBottom - (totalHeight - lineHeight) / 2;
+
+        // 绘制多行文字
+        for (let i = 0; i < lines.length; i++) {
+        const y = startY + i * lineHeight;
+
+        // 粉色描边
+        ctx.shadowColor = '#ff6b9d';
+        ctx.lineWidth = 1.5;
+        ctx.strokeText(lines[i], w / 2, y);
+
+        // 白色主文字 + 阴影
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+        ctx.shadowBlur = 6;
+        ctx.shadowOffsetY = 2;
+        ctx.fillText(lines[i], w / 2, y);
+        }
+
+        ctx.restore();
+        }
+
+        let startTime = null;
+
+        function animate(timestamp) {
+        if (!startTime) startTime = timestamp;
+        const elapsed = timestamp - startTime;
+        const t = elapsed % loopDuration;
+
+        let progress;
+        if (t <= drawDuration) {
+        progress = t / drawDuration;
+        } else {
+        progress = 1;
+        }
+
+        clear();
+        drawStrokeCurve(progress);
+        drawTrailStars(elapsed, progress);
+        drawTopStar(elapsed, progress);
+        drawText();
+
+        requestAnimationFrame(animate);
+        }
+
+        requestAnimationFrame(animate);
+    </script>
+</body>
+</html>
